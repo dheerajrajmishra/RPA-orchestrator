@@ -35,7 +35,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         String uri = request.getRequestURI();
-        if (uri.startsWith("/health") || uri.startsWith("/swagger-ui") || uri.startsWith("/v3/api-docs")) {
+        if (uri.startsWith("/health") || uri.startsWith("/swagger-ui") || uri.startsWith("/v3/api-docs") || uri.startsWith("/h2-console")) {
             filterChain.doFilter(request, response);
             return;
         }
