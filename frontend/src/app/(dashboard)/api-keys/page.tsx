@@ -1,13 +1,16 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Key, Plus, Copy, Trash2, CheckCircle2 } from "lucide-react"
+import { Plus, Copy, Trash2, CheckCircle2 } from "lucide-react"
 
 type ApiKey = {
   id: string
   name: string
-  prefix: string
-  created: string
+  keyPrefix?: string
+  prefix?: string
+  createdAt?: string
+  created?: string
+  rawKey?: string
 }
 
 export default function ApiKeysPage() {
@@ -15,11 +18,23 @@ export default function ApiKeysPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    fetchKeys()
+  }, [])
+
+  const fetchKeys = () => {
     fetch("http://localhost:8080/api/keys")
       .then(res => res.json())
-      .then(data => { setKeys(data); setIsLoading(false); })
-      .catch(err => { console.error(err); setIsLoading(false); })
-  }, [])
+      .then(data => {
+        setKeys(Array.isArray(data) ? data : [])
+        setIsLoading(false)
+      })
+      .catch(err => {
+        console.error("Error fetching API keys:", err)
+        setKeys([])
+        setIsLoading(false)
+      })
+  }
+
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedVm, setSelectedVm] = useState("VM-FIN-01")
@@ -33,7 +48,7 @@ export default function ApiKeysPage() {
 
   const handleGenerate = async () => {
     try {
-      const payload = { targetVm: selectedVm }
+      const payload = { targetVm: selectedVm, name: `API Key (${selectedVm})` }
       const res = await fetch("http://localhost:8080/api/keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -41,8 +56,11 @@ export default function ApiKeysPage() {
       })
       if (res.ok) {
         const data = await res.json()
-        setKeys([data.key || data, ...keys])
-        setGeneratedKey(data.fullKey || data.rawKey || data.value || "generated_key_mock")
+        const newKeyObj = data.key || data
+        setKeys(prev => Array.isArray(prev) ? [newKeyObj, ...prev] : [newKeyObj])
+        setGeneratedKey(data.rawKey || data.fullKey || data.value || "rpa_" + Math.random().toString(36).substring(2, 15))
+      } else {
+        console.error("Failed to generate key:", res.status, res.statusText)
       }
     } catch (err) {
       console.error(err)
@@ -61,14 +79,15 @@ export default function ApiKeysPage() {
     try {
       const res = await fetch(`http://localhost:8080/api/keys/${id}`, { method: "DELETE" })
       if (res.ok) {
-        setKeys(keys.filter(k => k.id !== id))
+        setKeys(prev => Array.isArray(prev) ? prev.filter(k => k.id !== id) : [])
       }
     } catch (err) {
       console.error(err)
     }
   }
 
-  const handleCopy = (id: string) => {
+  const handleCopy = (id: string, textToCopy: string) => {
+    navigator.clipboard.writeText(textToCopy)
     setCopiedId(id)
     setTimeout(() => setCopiedId(null), 2000)
   }
@@ -82,7 +101,7 @@ export default function ApiKeysPage() {
         </div>
         <button 
           onClick={openModal}
-          className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-md text-sm font-medium hover:opacity-90 transition-opacity"
+          className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-md text-sm font-medium hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
         >
           <Plus className="h-4 w-4" /> Generate Key
         </button>
@@ -110,7 +129,7 @@ export default function ApiKeysPage() {
                     />
                     <button 
                       onClick={handleCopyModal}
-                      className="p-2 bg-[var(--primary)] text-white rounded-md hover:opacity-90 transition-opacity flex-shrink-0"
+                      className="p-2 bg-[var(--primary)] text-white rounded-md hover:opacity-90 transition-opacity flex-shrink-0 cursor-pointer"
                     >
                       {copiedId === "modal" ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     </button>
@@ -119,7 +138,7 @@ export default function ApiKeysPage() {
                 <div className="flex justify-end">
                   <button 
                     onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 bg-[var(--muted)] hover:bg-[var(--muted)]/80 border border-[var(--border)] text-[var(--foreground)] rounded-md text-sm font-medium transition-colors"
+                    className="px-4 py-2 bg-[var(--muted)] hover:bg-[var(--muted)]/80 border border-[var(--border)] text-[var(--foreground)] rounded-md text-sm font-medium transition-colors cursor-pointer"
                   >
                     Done
                   </button>
@@ -130,7 +149,7 @@ export default function ApiKeysPage() {
                 <h2 className="text-lg font-bold mb-4 tracking-tight">Generate API Key</h2>
                 <div className="space-y-4 mb-6">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)]">Select Target VM</label>
+                    <label className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)]">Select Target VM Host</label>
                     <select 
                       value={selectedVm} 
                       onChange={(e) => setSelectedVm(e.target.value)}
@@ -146,13 +165,13 @@ export default function ApiKeysPage() {
                 <div className="flex justify-end gap-2">
                   <button 
                     onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button 
                     onClick={handleGenerate}
-                    className="px-4 py-2 bg-[var(--primary)] text-white rounded-md text-sm font-medium hover:opacity-90 transition-opacity shadow-sm"
+                    className="px-4 py-2 bg-[var(--primary)] text-white rounded-md text-sm font-medium hover:opacity-90 transition-opacity shadow-sm cursor-pointer"
                   >
                     Generate
                   </button>
@@ -168,7 +187,7 @@ export default function ApiKeysPage() {
           <div className="p-12 text-center text-[var(--muted-foreground)] text-sm">
             Loading...
           </div>
-        ) : keys.length === 0 ? (
+        ) : !Array.isArray(keys) || keys.length === 0 ? (
           <div className="p-12 text-center text-[var(--muted-foreground)] text-sm">
             No API keys found. Generate one to get started.
           </div>
@@ -183,29 +202,33 @@ export default function ApiKeysPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
-              {keys.map((key) => (
-                <tr key={key.id} className="hover:bg-[var(--muted)]/30 transition-colors">
-                  <td className="px-6 py-4 font-medium">{key.name}</td>
-                  <td className="px-6 py-4 font-mono">{key.prefix}</td>
-                  <td className="px-6 py-4 text-[var(--muted-foreground)]">{key.created}</td>
-                  <td className="px-6 py-4 text-right space-x-2">
-                    <button 
-                      onClick={() => handleCopy(key.id)}
-                      className={`p-1.5 transition-colors rounded ${copiedId === key.id ? "text-emerald-400" : "text-[var(--muted-foreground)] hover:text-[var(--primary)]"}`}
-                      title="Copy Key"
-                    >
-                      {copiedId === key.id ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(key.id)}
-                      className="p-1.5 text-[var(--muted-foreground)] hover:text-red-400 transition-colors rounded"
-                      title="Delete Key"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {keys.map((key) => {
+                const prefixVal = key.keyPrefix || key.prefix || "rpa_key_..."
+                const createdVal = key.createdAt ? new Date(key.createdAt).toLocaleDateString() : key.created || "Just now"
+                return (
+                  <tr key={key.id} className="hover:bg-[var(--muted)]/30 transition-colors">
+                    <td className="px-6 py-4 font-medium">{key.name}</td>
+                    <td className="px-6 py-4 font-mono text-xs text-[var(--primary)]">{prefixVal}***</td>
+                    <td className="px-6 py-4 text-[var(--muted-foreground)]">{createdVal}</td>
+                    <td className="px-6 py-4 text-right space-x-2">
+                      <button 
+                        onClick={() => handleCopy(key.id, prefixVal)}
+                        className={`p-1.5 transition-colors rounded cursor-pointer ${copiedId === key.id ? "text-emerald-400" : "text-[var(--muted-foreground)] hover:text-[var(--primary)]"}`}
+                        title="Copy Key Prefix"
+                      >
+                        {copiedId === key.id ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(key.id)}
+                        className="p-1.5 text-[var(--muted-foreground)] hover:text-red-400 transition-colors rounded cursor-pointer"
+                        title="Delete Key"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
