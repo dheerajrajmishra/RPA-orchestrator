@@ -3,6 +3,7 @@
 **/*.jar
 **/*.war
 **/*.class
+*.tar
 
 # Node & Next.js build artifacts
 **/node_modules/
