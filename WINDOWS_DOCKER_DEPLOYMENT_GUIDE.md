@@ -1,10 +1,16 @@
 # Multi-Container Docker Deployment Guide for Windows Server VM
 
-This guide provides step-by-step instructions to deploy the entire RPA Orchestrator system (`postgres`, `backend`, `reporter-api`, and `frontend`) on a **Windows Server VM** using Docker and Docker Compose.
+This guide provides step-by-step instructions to deploy the entire RPA Orchestrator system (`postgres`, `backend`, `reporter-api`, and `frontend`) on a **Windows Server VM** using Docker and Docker Compose (Online or Offline Air-Gapped).
 
 ---
 
-## Step 1: Prerequisites Installation on Windows Server VM
+## Deployment Options
+- **Option A: Online Deployment (With GitHub Access)** — See Sections 1 to 4.
+- **Option B: Offline / Air-Gapped Deployment (Without GitHub / Internet Access)** — See Section 5.
+
+---
+
+## 1. Prerequisites Installation on Windows Server VM
 
 Open **PowerShell as Administrator** on your Windows Server VM:
 
@@ -21,14 +27,9 @@ Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -NoRes
 - Ensure **"Use WSL 2 instead of Hyper-V"** is checked during installation.
 - Launch Docker Desktop and wait until status turns **Green / Running**.
 
-### 1.3 Install Git for Windows
-- Download & install [Git for Windows](https://git-scm.com/download/win).
-
 ---
 
-## Step 2: Clone GitHub Repository on Windows Server VM
-
-Open **PowerShell** and navigate to your deployment directory (e.g. `C:\RPA`):
+## 2. Option A: Online Deployment (With GitHub)
 
 ```powershell
 # Create deployment directory
@@ -38,99 +39,96 @@ Set-Location -Path "C:\RPA"
 # Clone the repository
 git clone https://github.com/dheerajrajmishra/RPA-orchestrator.git
 Set-Location -Path "C:\RPA\RPA-orchestrator"
-```
 
----
-
-## Step 3: Build & Launch Multi-Container Setup
-
-Run the following command to build images and launch all 4 services in the background:
-
-```powershell
-# Launch all containers in detached mode
+# Launch containers
 docker compose up --build -d
 ```
 
-### Docker Output Expectation:
+---
+
+## 3. Option B: Offline / Air-Gapped Deployment (Without GitHub / Internet)
+
+If your Windows Server VM does **not** have internet or GitHub access, follow one of these 2 methods:
+
+### Method 1: Local Folder Transfer (ZIP Copy)
+1. On your developer machine, compress the project folder into `RPA-orchestrator.zip`.
+2. Transfer `RPA-orchestrator.zip` to the VM using **RDP Copy-Paste**, **Shared Network Drive (SMB)**, or **USB Drive**.
+3. Extract `RPA-orchestrator.zip` on the VM to `C:\RPA\RPA-orchestrator`.
+4. Open **PowerShell** on the VM and execute:
+   ```powershell
+   Set-Location -Path "C:\RPA\RPA-orchestrator"
+   docker compose up --build -d
+   ```
+
+### Method 2: Pre-Built Offline Docker Images Tarball (Recommended for 100% Offline VMs)
+If Maven/npm dependencies cannot be downloaded on the VM during container build:
+
+#### Step 3.1: On Developer Machine (With Internet Access):
+```powershell
+# 1. Build container images
+docker compose build
+
+# 2. Package all 4 built images into a single offline tarball archive
+docker save -o rpa-images.tar postgres:16-alpine rpa-backend rpa-reporter-api rpa-frontend
 ```
-[+] Building 4/4
- -> [postgres] Pulling image postgres:16-alpine
- -> [backend] Building Spring Boot Core API Image...
- -> [reporter-api] Building Spring Boot Ingest API Image...
- -> [frontend] Building Next.js 14 Dashboard UI Image...
-[+] Running 4/4
- ✔ Container rpa-postgres      Healthy
- ✔ Container rpa-backend       Started
- ✔ Container rpa-reporter-api  Started
- ✔ Container rpa-frontend      Started
+
+#### Step 3.2: Transfer Files to VM:
+Copy `rpa-images.tar` and `docker-compose.yml` to `C:\RPA` on the Windows Server VM.
+
+#### Step 3.3: On Air-Gapped Windows Server VM (No Internet / GitHub Needed):
+Open **PowerShell** on the VM:
+```powershell
+Set-Location -Path "C:\RPA"
+
+# 1. Load pre-built images directly into Docker Engine
+docker load -i rpa-images.tar
+
+# 2. Launch all 4 containers instantly without building or internet!
+docker compose up -d
 ```
 
 ---
 
-## Step 4: Verify Container Health & Endpoints
+## 4. Verify Container Health & Endpoints
 
-### 4.1 Check Container Statuses
 ```powershell
+# Check container statuses
 docker compose ps
-```
 
-### 4.2 Check Application Endpoints via PowerShell
-```powershell
-# 1. Frontend Dashboard (Port 3000)
-(Invoke-WebRequest -Uri http://localhost:3000 -UseBasicParsing).StatusCode
-# Output: 200
-
-# 2. Core Backend API (Port 8080)
-(Invoke-WebRequest -Uri http://localhost:8080/api/hosts -UseBasicParsing).StatusCode
-# Output: 200
-
-# 3. Reporter Ingest API Health (Port 8081)
-(Invoke-WebRequest -Uri http://localhost:8081/health -UseBasicParsing).StatusCode
-# Output: 200
+# Check endpoints via PowerShell
+(Invoke-WebRequest -Uri http://localhost:3000 -UseBasicParsing).StatusCode    # 200 OK (Frontend)
+(Invoke-WebRequest -Uri http://localhost:8080/api/hosts -UseBasicParsing).StatusCode # 200 OK (Backend API)
+(Invoke-WebRequest -Uri http://localhost:8081/health -UseBasicParsing).StatusCode  # 200 OK (Reporter API)
 ```
 
 ---
 
-## Step 5: Configure Windows Firewall
-
-To allow user browsers and worker VMs to access the Orchestrator over the company network:
+## 5. Configure Windows Firewall Rules
 
 ```powershell
-# Run in PowerShell as Administrator
-
-# Allow Inbound Traffic for Frontend UI (Port 3000)
+# Run in PowerShell as Administrator on Server VM
 New-NetFirewallRule -DisplayName "RPA Orchestrator Frontend" -Direction Inbound -LocalPort 3000 -Protocol TCP -Action Allow
-
-# Allow Inbound Traffic for Core Backend API (Port 8080)
 New-NetFirewallRule -DisplayName "RPA Orchestrator Backend API" -Direction Inbound -LocalPort 8080 -Protocol TCP -Action Allow
-
-# Allow Inbound Traffic for Reporter Ingest API (Port 8081)
 New-NetFirewallRule -DisplayName "RPA Orchestrator Reporter API" -Direction Inbound -LocalPort 8081 -Protocol TCP -Action Allow
 ```
 
 ---
 
-## Step 6: Worker VM Configuration (RPA Bots)
+## 6. Worker VM Integration (RPA Bots)
 
-On each Execution Worker VM (e.g. `VM-FIN-01`), configure your Python bot scripts to send heartbeats and execution logs:
+On each Execution Worker VM (e.g. `VM-FIN-01`), configure Python scripts:
 
 ```python
 from orchestrator_sdk.reporter import RunReporter
 
-# Replace SERVER_VM_IP with your Orchestrator Server VM IP address
 reporter = RunReporter(
     api_url="http://SERVER_VM_IP:8081",
     api_key="rpa_b913ad1497ed426ebc1aed66701af4f3"
 )
 
-# Start execution run
+# Start run & report step progress
 run_id = reporter.start_run(process_slug="invoice-processing")
-
-# Log execution progress
-reporter.log("Extracting invoices from Outlook...", level="INFO")
-reporter.log_step("Read Email Attachments", status="SUCCESS")
-
-# Complete execution
+reporter.log("Processing invoice #10024...", level="INFO")
 reporter.complete_run(status="SUCCESS")
 ```
 
@@ -139,20 +137,15 @@ reporter.complete_run(status="SUCCESS")
 ## Useful Maintenance Commands
 
 ```powershell
-# View Live Logs across all containers
+# View Live Logs across containers
 docker compose logs -f
 
-# View Logs for a specific container
-docker compose logs -f backend
-docker compose logs -f reporter-api
-docker compose logs -f frontend
-
-# Restart all containers
+# Restart services
 docker compose restart
 
-# Stop all containers
+# Stop services
 docker compose down
 
-# Stop all containers AND clear database volume (Clean Reset)
+# Stop & clear database volume (Clean Reset)
 docker compose down -v
 ```
