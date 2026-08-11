@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Copy, Trash2, CheckCircle2 } from "lucide-react"
+import { Plus, Copy, Trash2, CheckCircle2, AlertTriangle } from "lucide-react"
 
 type ApiKey = {
   id: string
@@ -16,6 +16,11 @@ type ApiKey = {
 export default function ApiKeysPage() {
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [deletingKey, setDeletingKey] = useState<ApiKey | null>(null)
+  const [selectedVm, setSelectedVm] = useState("VM-FIN-01")
+  const [generatedKey, setGeneratedKey] = useState<string | null>(null)
 
   useEffect(() => {
     fetchKeys()
@@ -34,11 +39,6 @@ export default function ApiKeysPage() {
         setIsLoading(false)
       })
   }
-
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [selectedVm, setSelectedVm] = useState("VM-FIN-01")
-  const [generatedKey, setGeneratedKey] = useState<string | null>(null)
 
   const openModal = () => {
     setSelectedVm("VM-FIN-01")
@@ -75,11 +75,13 @@ export default function ApiKeysPage() {
     }
   }
 
-  const handleDelete = async (id: string) => {
+  const confirmDelete = async () => {
+    if (!deletingKey) return
     try {
-      const res = await fetch(`http://localhost:8080/api/keys/${id}`, { method: "DELETE" })
+      const res = await fetch(`http://localhost:8080/api/keys/${deletingKey.id}`, { method: "DELETE" })
       if (res.ok) {
-        setKeys(prev => Array.isArray(prev) ? prev.filter(k => k.id !== id) : [])
+        setKeys(prev => Array.isArray(prev) ? prev.filter(k => k.id !== deletingKey.id) : [])
+        setDeletingKey(null)
       }
     } catch (err) {
       console.error(err)
@@ -107,7 +109,7 @@ export default function ApiKeysPage() {
         </button>
       </div>
       
-      {/* Modal Overlay */}
+      {/* Generate Key Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 shadow-2xl w-full max-w-sm m-4 animate-in fade-in zoom-in-95 duration-200">
@@ -182,6 +184,34 @@ export default function ApiKeysPage() {
         </div>
       )}
 
+      {/* Delete Confirmation Modal */}
+      {deletingKey && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 shadow-2xl w-full max-w-sm m-4 animate-in fade-in zoom-in-95 duration-200">
+            <h2 className="text-lg font-bold mb-2 tracking-tight text-red-500 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" /> Delete API Key
+            </h2>
+            <p className="text-sm text-[var(--muted-foreground)] mb-6 leading-relaxed">
+              Are you sure you want to delete <strong className="text-[var(--foreground)]">{deletingKey.name}</strong> (<span className="font-mono text-xs text-[var(--primary)]">{deletingKey.keyPrefix || deletingKey.prefix || "rpa_..."}***</span>)? Any RPA bots using this key will immediately lose access.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button 
+                onClick={() => setDeletingKey(null)}
+                className="px-4 py-2 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmDelete}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-medium transition-colors shadow-sm cursor-pointer"
+              >
+                Delete Key
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm overflow-hidden">
         {isLoading ? (
           <div className="p-12 text-center text-[var(--muted-foreground)] text-sm">
@@ -219,7 +249,7 @@ export default function ApiKeysPage() {
                         {copiedId === key.id ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                       </button>
                       <button 
-                        onClick={() => handleDelete(key.id)}
+                        onClick={() => setDeletingKey(key)}
                         className="p-1.5 text-[var(--muted-foreground)] hover:text-red-400 transition-colors rounded cursor-pointer"
                         title="Delete Key"
                       >
