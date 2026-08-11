@@ -1,0 +1,43 @@
+# Maven & Java build artifacts
+**/target/
+**/*.jar
+**/*.war
+**/*.class
+
+# Node & Next.js build artifacts
+**/node_modules/
+**/.next/
+**/out/
+**/build/
+**/dist/
+
+# Python cache & virtualenv
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache/
+**/.venv/
+**/venv/
+
+# Environment files
+.env
+.env*.local
+
+# Office & temporary lock files
+~$*.docx
+~$*.xlsx
+*.log
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+.antigravity/
+
+# OS metadata
+.DS_Store
+Thumbs.db

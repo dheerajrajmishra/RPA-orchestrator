@@ -1,0 +1,411 @@
+openapi: 3.0.3
+info:
+  title: RPA Orchestrator API
+  description: |
+    API Specification for the RPA Orchestrator System.
+    Includes VM-facing ingest endpoints (`reporter-api`) and Dashboard-facing management endpoints (`backend`).
+  version: 1.0.0
+servers:
+  - url: http://localhost:8081
+    description: Reporter API (VM Ingest Service)
+  - url: http://localhost:8080
+    description: Backend API (Dashboard Service)
+
+paths:
+  /health:
+    get:
+      summary: Health Check
+      description: Returns service health status.
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: UP
+
+  /reporter/v1/runs:
+    post:
+      summary: Start Process Run
+      description: Registers process run start event. Auto-creates process registry entry if slug does not exist.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartRunRequest'
+      responses:
+        '200':
+          description: Run started successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessRun'
+
+  /reporter/v1/runs/{runId}:
+    patch:
+      summary: Complete Process Run
+      description: Updates execution run completion status, output summaries, or error tracebacks.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteRunRequest'
+      responses:
+        '200':
+          description: Run completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessRun'
+
+  /reporter/v1/runs/{runId}/heartbeat:
+    post:
+      summary: Heartbeat Ping
+      description: Updates process run heartbeat timestamp.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Heartbeat recorded
+
+  /reporter/v1/runs/{runId}/steps:
+    post:
+      summary: Start Execution Step
+      description: Reports step execution start.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartStepRequest'
+      responses:
+        '200':
+          description: Step reported successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessRunStep'
+
+  /reporter/v1/runs/{runId}/steps/{stepId}:
+    patch:
+      summary: Complete Execution Step
+      description: Updates execution step status to success or failure.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: stepId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteStepRequest'
+      responses:
+        '200':
+          description: Step completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessRunStep'
+
+  /reporter/v1/runs/{runId}/logs:
+    post:
+      summary: Ingest Log Line
+      description: Appends a single log line to run logs.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestLogRequest'
+      responses:
+        '200':
+          description: Log ingested successfully
+
+  /reporter/v1/runs/{runId}/logs/batch:
+    post:
+      summary: Ingest Batch Logs
+      description: Appends multiple log lines in one HTTP call.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestLogBatchRequest'
+      responses:
+        '200':
+          description: Batch logs ingested successfully
+
+  /api/v1/auth/login:
+    post:
+      summary: Admin / User Authentication
+      description: Authenticates user credentials and returns JWT bearer token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: admin
+                password:
+                  type: string
+                  example: password
+      responses:
+        '200':
+          description: JWT token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+
+  /api/v1/processes:
+    get:
+      summary: List Registered Processes
+      description: Returns list of all registered RPA processes.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of processes
+    post:
+      summary: Register Process
+      description: Creates a new process entry.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, slug, scriptPath, workerHost]
+              properties:
+                name:
+                  type: string
+                slug:
+                  type: string
+                scriptPath:
+                  type: string
+                workerHost:
+                  type: string
+      responses:
+        '200':
+          description: Process registered
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API Key authentication for VM reporters (Default Dev Key `dev_key_12345`)
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Token for dashboard access
+
+  schemas:
+    StartRunRequest:
+      type: object
+      required: [processSlug, workerHost]
+      properties:
+        processSlug:
+          type: string
+          example: invoice-processor
+        trigger:
+          type: string
+          example: scheduled
+        workerHost:
+          type: string
+          example: VM-01
+        workerPid:
+          type: integer
+          example: 1042
+        inputParams:
+          type: object
+
+    CompleteRunRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [success, failed, timeout, cancelled]
+        recordsProcessed:
+          type: integer
+          example: 100
+        recordsFailed:
+          type: integer
+          example: 0
+        outputSummary:
+          type: object
+        errorMessage:
+          type: string
+        errorTraceback:
+          type: string
+        errorCategory:
+          type: string
+
+    StartStepRequest:
+      type: object
+      required: [stepName, stepOrder]
+      properties:
+        stepName:
+          type: string
+          example: Extract PDF
+        stepOrder:
+          type: integer
+          example: 1
+
+    CompleteStepRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [success, failed]
+        details:
+          type: object
+        errorMessage:
+          type: string
+
+    IngestLogRequest:
+      type: object
+      required: [message]
+      properties:
+        logLevel:
+          type: string
+          example: INFO
+        message:
+          type: string
+          example: Session established
+        stepId:
+          type: string
+          format: uuid
+        context:
+          type: object
+
+    IngestLogBatchRequest:
+      type: object
+      required: [logs]
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/IngestLogRequest'
+
+    ProcessRun:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        runId:
+          type: string
+          format: uuid
+        processId:
+          type: string
+          format: uuid
+        processSlug:
+          type: string
+        trigger:
+          type: string
+        status:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        workerHost:
+          type: string
+
+    ProcessRunStep:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        stepId:
+          type: string
+          format: uuid
+        runId:
+          type: string
+          format: uuid
+        stepName:
+          type: string
+        stepOrder:
+          type: integer
+        status:
+          type: string
