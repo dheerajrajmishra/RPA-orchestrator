@@ -1,15 +1,16 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Server, Plus, Trash2, Edit2, CheckCircle2, Activity } from "lucide-react"
+import { Server, Plus, Trash2, Edit2 } from "lucide-react"
 
 type VmHost = {
   id: string
-  name: string
+  name?: string
+  hostname?: string
   category: string
   ipAddress: string
   status: "online" | "offline"
-  lastSeen: string
+  lastSeen?: string
 }
 
 export default function VmHostsPage() {
@@ -17,45 +18,98 @@ export default function VmHostsPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    fetchHosts()
+  }, [])
+
+  const fetchHosts = () => {
     fetch("http://localhost:8080/api/hosts")
       .then(res => res.json())
       .then(data => { setHosts(data); setIsLoading(false); })
       .catch(err => { console.error(err); setIsLoading(false); })
-  }, [])
+  }
+
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingHost, setEditingHost] = useState<VmHost | null>(null)
 
   // Form State
   const [hostName, setHostName] = useState("")
   const [category, setCategory] = useState("Finance")
   const [ipAddress, setIpAddress] = useState("")
 
-  const handleAddHost = async (e: React.FormEvent) => {
+  const handleOpenAddModal = () => {
+    setEditingHost(null)
+    setHostName("")
+    setCategory("Finance")
+    setIpAddress("")
+    setIsModalOpen(true)
+  }
+
+  const handleOpenEditModal = (host: VmHost) => {
+    setEditingHost(host)
+    setHostName(host.name || host.hostname || "")
+    setCategory(host.category || "Finance")
+    setIpAddress(host.ipAddress || "")
+    setIsModalOpen(true)
+  }
+
+  const handleSubmitHost = async (e: React.FormEvent) => {
     e.preventDefault()
-    const payload = {
-      name: hostName,
-      hostname: hostName,
-      category,
-      ipAddress: ipAddress || "Pending...",
-      status: "offline",
-      lastSeen: null
-    }
-    try {
-      const res = await fetch("http://localhost:8080/api/hosts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      })
-      if (res.ok) {
-        const newHost = await res.json()
-        setHosts([newHost, ...hosts])
-        setIsModalOpen(false)
-        setHostName("")
-        setIpAddress("")
-      } else {
-        console.error("Failed to add host:", res.status, res.statusText)
+    
+    if (editingHost) {
+      // Update Host via PUT /api/hosts/{id}
+      const payload = {
+        name: hostName,
+        hostname: hostName,
+        category,
+        ipAddress: ipAddress || "Pending..."
       }
-    } catch (err) {
-      console.error(err)
+      try {
+        const res = await fetch(`http://localhost:8080/api/hosts/${editingHost.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        })
+        if (res.ok) {
+          const updatedHost = await res.json()
+          setHosts(hosts.map(h => h.id === editingHost.id ? updatedHost : h))
+          setIsModalOpen(false)
+          setEditingHost(null)
+          setHostName("")
+          setIpAddress("")
+        } else {
+          console.error("Failed to update host:", res.status, res.statusText)
+        }
+      } catch (err) {
+        console.error(err)
+      }
+    } else {
+      // Add Host via POST /api/hosts
+      const payload = {
+        name: hostName,
+        hostname: hostName,
+        category,
+        ipAddress: ipAddress || "Pending...",
+        status: "offline",
+        lastSeen: null
+      }
+      try {
+        const res = await fetch("http://localhost:8080/api/hosts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        })
+        if (res.ok) {
+          const newHost = await res.json()
+          setHosts([newHost, ...hosts])
+          setIsModalOpen(false)
+          setHostName("")
+          setIpAddress("")
+        } else {
+          console.error("Failed to add host:", res.status, res.statusText)
+        }
+      } catch (err) {
+        console.error(err)
+      }
     }
   }
 
@@ -78,8 +132,8 @@ export default function VmHostsPage() {
           <p className="text-sm text-[var(--muted-foreground)] mt-1">Manage the Virtual Machines that execute your RPA processes.</p>
         </div>
         <button 
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-md text-sm font-medium hover:opacity-90 transition-opacity"
+          onClick={handleOpenAddModal}
+          className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-md text-sm font-medium hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
         >
           <Plus className="h-4 w-4" /> Add Host
         </button>
@@ -89,9 +143,11 @@ export default function VmHostsPage() {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 shadow-2xl w-full max-w-md m-4 animate-in fade-in zoom-in-95 duration-200">
-            <h2 className="text-lg font-bold mb-4 tracking-tight">Register New VM Host</h2>
+            <h2 className="text-lg font-bold mb-4 tracking-tight">
+              {editingHost ? "Edit VM Host Details" : "Register New VM Host"}
+            </h2>
             
-            <form onSubmit={handleAddHost} className="space-y-4 mb-6">
+            <form onSubmit={handleSubmitHost} className="space-y-4 mb-6">
               <div className="space-y-1.5">
                 <label className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)]">Hostname</label>
                 <input 
@@ -134,16 +190,16 @@ export default function VmHostsPage() {
             <div className="flex justify-end gap-2">
               <button 
                 type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                onClick={() => { setIsModalOpen(false); setEditingHost(null); }}
+                className="px-4 py-2 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button 
-                onClick={handleAddHost}
-                className="px-4 py-2 bg-[var(--primary)] text-white rounded-md text-sm font-medium hover:opacity-90 transition-opacity shadow-sm"
+                onClick={handleSubmitHost}
+                className="px-4 py-2 bg-[var(--primary)] text-white rounded-md text-sm font-medium hover:opacity-90 transition-opacity shadow-sm cursor-pointer"
               >
-                Register Host
+                {editingHost ? "Save Changes" : "Register Host"}
               </button>
             </div>
           </div>
@@ -176,7 +232,7 @@ export default function VmHostsPage() {
                   <td className="px-6 py-4">
                     <div className="font-medium flex items-center gap-2">
                       <Server className="h-4 w-4 text-[var(--muted-foreground)]" />
-                      {host.name || (host as any).hostname || "Unnamed Host"}
+                      {host.name || host.hostname || "Unnamed Host"}
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -198,14 +254,15 @@ export default function VmHostsPage() {
                   </td>
                   <td className="px-6 py-4 text-right space-x-2">
                     <button 
-                      className="p-1.5 text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors rounded"
+                      onClick={() => handleOpenEditModal(host)}
+                      className="p-1.5 text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-colors rounded cursor-pointer"
                       title="Edit Host"
                     >
                       <Edit2 className="h-4 w-4" />
                     </button>
                     <button 
                       onClick={() => handleDelete(host.id)}
-                      className="p-1.5 text-[var(--muted-foreground)] hover:text-red-400 transition-colors rounded"
+                      className="p-1.5 text-[var(--muted-foreground)] hover:text-red-400 transition-colors rounded cursor-pointer"
                       title="Remove Host"
                     >
                       <Trash2 className="h-4 w-4" />
