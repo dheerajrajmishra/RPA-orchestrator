@@ -15,7 +15,12 @@ public class AlertController {
     @Autowired private AlertRuleRepository ruleRepo;
     
     @GetMapping
-    public List<Alert> getAlerts() {
+    public Object getAlerts(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        if (page != null && size != null) {
+            return alertRepo.findAll(org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by("timestamp").descending()));
+        }
         return alertRepo.findAll();
     }
     

@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { AlertTriangle, Bell, CheckCircle2, Settings, Mail, Plus, XCircle, Clock, Server, Activity } from "lucide-react"
+import { Pagination } from "@/components/ui/pagination"
+import { API_BASE_URL } from "@/lib/config"
 
 type Alert = {
   id: string
@@ -25,27 +27,55 @@ export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [rules, setRules] = useState<AlertRule[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [totalAlertsCount, setTotalAlertsCount] = useState(0)
+
+  const totalPagesAlerts = Math.ceil((totalAlertsCount || alerts.length) / itemsPerPage) || 1
+  const totalPagesRules = Math.ceil(rules.length / itemsPerPage) || 1
+  const paginatedRules = rules.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
   useEffect(() => {
-    Promise.all([
-      fetch("http://localhost:8080/api/alerts").then(res => res.json()),
-      fetch("http://localhost:8080/api/alerts/rules").then(res => res.json())
-    ])
-      .then(([alertsData, rulesData]) => {
-        setAlerts(alertsData)
-        setRules(rulesData)
+    fetchRules()
+  }, [])
+
+  useEffect(() => {
+    fetchAlerts(currentPage, itemsPerPage)
+  }, [currentPage, itemsPerPage])
+
+  const fetchAlerts = (page: number = 1, size: number = 10) => {
+    fetch(`${API_BASE_URL}/api/alerts?page=${page - 1}&size=${size}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data.content)) {
+          setAlerts(data.content)
+          setTotalAlertsCount(data.totalElements ?? data.content.length)
+        } else if (Array.isArray(data)) {
+          setAlerts(data)
+          setTotalAlertsCount(data.length)
+        } else {
+          setAlerts([data])
+          setTotalAlertsCount(1)
+        }
         setIsLoading(false)
       })
       .catch(err => {
         console.error(err)
         setIsLoading(false)
       })
-  }, [])
+  }
+
+  const fetchRules = () => {
+    fetch(`${API_BASE_URL}/api/alerts/rules`)
+      .then(res => res.json())
+      .then(rulesData => setRules(Array.isArray(rulesData) ? rulesData : []))
+      .catch(err => console.error(err))
+  }
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false)
 
   const handleAcknowledge = async (id: string) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/alerts/${id}/acknowledge`, { method: "POST" })
+      const res = await fetch(`${API_BASE_URL}/api/alerts/${id}/acknowledge`, { method: "POST" })
       if (res.ok) {
         setAlerts(alerts.map(a => a.id === id ? { ...a, status: "acknowledged" } : a))
       }
@@ -58,7 +88,7 @@ export default function AlertsPage() {
     const rule = rules.find(r => r.id === id)
     if (!rule) return
     try {
-      const res = await fetch(`http://localhost:8080/api/alerts/rules/${id}/toggle`, {
+      const res = await fetch(`${API_BASE_URL}/api/alerts/rules/${id}/toggle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled: !rule.enabled })
@@ -121,38 +151,51 @@ export default function AlertsPage() {
               All clear! There are no alerts to display.
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3">
-              {alerts.map(alert => (
-                <div key={alert.id} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border shadow-sm transition-all ${alert.status === "active" ? "bg-[var(--card)] border-[var(--border)]" : "bg-[var(--muted)]/20 border-transparent opacity-75"}`}>
-                  <div className="flex items-start gap-4">
-                    <div className="mt-1 flex-shrink-0">
-                      {alert.severity === "critical" && <XCircle className="h-5 w-5 text-red-500" />}
-                      {alert.severity === "warning" && <AlertTriangle className="h-5 w-5 text-amber-500" />}
-                      {alert.severity === "info" && <Bell className="h-5 w-5 text-blue-500" />}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-sm flex items-center gap-2">
-                        {alert.message}
-                        {alert.status === "active" && (
-                          <span className="px-2 py-0.5 rounded text-[10px] uppercase tracking-wider font-bold bg-red-500/10 text-red-500 border border-red-500/20">New</span>
-                        )}
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-3">
+                {alerts.map(alert => (
+                  <div key={alert.id} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border shadow-sm transition-all ${alert.status === "active" ? "bg-[var(--card)] border-[var(--border)]" : "bg-[var(--muted)]/20 border-transparent opacity-75"}`}>
+                    <div className="flex items-start gap-4">
+                      <div className="mt-1 flex-shrink-0">
+                        {alert.severity === "critical" && <XCircle className="h-5 w-5 text-red-500" />}
+                        {alert.severity === "warning" && <AlertTriangle className="h-5 w-5 text-amber-500" />}
+                        {alert.severity === "info" && <Bell className="h-5 w-5 text-blue-500" />}
                       </div>
-                      <div className="flex items-center gap-4 mt-1.5 text-xs text-[var(--muted-foreground)]">
-                        <span className="flex items-center gap-1"><Server className="h-3.5 w-3.5" /> {alert.source}</span>
-                        <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {alert.timestamp}</span>
+                      <div>
+                        <div className="font-semibold text-sm flex items-center gap-2">
+                          {alert.message}
+                          {alert.status === "active" && (
+                            <span className="px-2 py-0.5 rounded text-[10px] uppercase tracking-wider font-bold bg-red-500/10 text-red-500 border border-red-500/20">New</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-4 mt-1.5 text-xs text-[var(--muted-foreground)]">
+                          <span className="flex items-center gap-1"><Server className="h-3.5 w-3.5" /> {alert.source}</span>
+                          <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {alert.timestamp}</span>
+                        </div>
                       </div>
                     </div>
+                    {alert.status === "active" && (
+                      <button 
+                        onClick={() => handleAcknowledge(alert.id)}
+                        className="px-3 py-1.5 text-xs font-medium border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--muted)] transition-colors rounded-md flex-shrink-0"
+                      >
+                        Acknowledge
+                      </button>
+                    )}
                   </div>
-                  {alert.status === "active" && (
-                    <button 
-                      onClick={() => handleAcknowledge(alert.id)}
-                      className="px-3 py-1.5 text-xs font-medium border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--muted)] transition-colors rounded-md flex-shrink-0"
-                    >
-                      Acknowledge
-                    </button>
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
+
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm overflow-hidden">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPagesAlerts}
+                  totalItems={totalAlertsCount || alerts.length}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                  onItemsPerPageChange={setItemsPerPage}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -163,43 +206,54 @@ export default function AlertsPage() {
           {isLoading ? (
             <div className="p-12 text-center text-[var(--muted-foreground)] text-sm">Loading...</div>
           ) : (
-          <table className="w-full text-sm text-left">
-            <thead className="text-xs text-[var(--muted-foreground)] uppercase bg-[var(--muted)]/50 border-b border-[var(--border)]">
-              <tr>
-                <th className="px-6 py-3 font-semibold tracking-wider">Rule Name</th>
-                <th className="px-6 py-3 font-semibold tracking-wider">Condition</th>
-                <th className="px-6 py-3 font-semibold tracking-wider">Action</th>
-                <th className="px-6 py-3 font-semibold tracking-wider text-right">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {rules.map(rule => (
-                <tr key={rule.id} className={`transition-colors ${rule.enabled ? 'hover:bg-[var(--muted)]/30' : 'bg-[var(--muted)]/10 text-[var(--muted-foreground)]'}`}>
-                  <td className="px-6 py-4 font-medium flex items-center gap-2">
-                    <Activity className={`h-4 w-4 ${rule.enabled ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`} />
-                    {rule.name}
-                  </td>
-                  <td className="px-6 py-4 font-mono text-xs">{rule.condition}</td>
-                  <td className="px-6 py-4">
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded border border-[var(--border)] bg-[var(--background)] text-xs w-fit">
-                      <Mail className="h-3.5 w-3.5" /> {rule.action}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        className="sr-only peer" 
-                        checked={rule.enabled}
-                        onChange={() => handleToggleRule(rule.id)}
-                      />
-                      <div className="w-9 h-5 bg-[var(--muted)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--primary)]"></div>
-                    </label>
-                  </td>
+          <>
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs text-[var(--muted-foreground)] uppercase bg-[var(--muted)]/50 border-b border-[var(--border)]">
+                <tr>
+                  <th className="px-6 py-3 font-semibold tracking-wider">Rule Name</th>
+                  <th className="px-6 py-3 font-semibold tracking-wider">Condition</th>
+                  <th className="px-6 py-3 font-semibold tracking-wider">Action</th>
+                  <th className="px-6 py-3 font-semibold tracking-wider text-right">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {paginatedRules.map(rule => (
+                  <tr key={rule.id} className={`transition-colors ${rule.enabled ? 'hover:bg-[var(--muted)]/30' : 'bg-[var(--muted)]/10 text-[var(--muted-foreground)]'}`}>
+                    <td className="px-6 py-4 font-medium flex items-center gap-2">
+                      <Activity className={`h-4 w-4 ${rule.enabled ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`} />
+                      {rule.name}
+                    </td>
+                    <td className="px-6 py-4 font-mono text-xs">{rule.condition}</td>
+                    <td className="px-6 py-4">
+                      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded border border-[var(--border)] bg-[var(--background)] text-xs w-fit">
+                        <Mail className="h-3.5 w-3.5" /> {rule.action}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          className="sr-only peer" 
+                          checked={rule.enabled}
+                          onChange={() => handleToggleRule(rule.id)}
+                        />
+                        <div className="w-9 h-5 bg-[var(--muted)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--primary)]"></div>
+                      </label>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPagesRules}
+              totalItems={rules.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+              onItemsPerPageChange={setItemsPerPage}
+            />
+          </>
           )}
         </div>
       )}

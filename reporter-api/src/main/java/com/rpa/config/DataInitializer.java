@@ -23,23 +23,25 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        if (apiKeyRepository.count() == 0) {
-            String rawKey = "dev_key_12345";
-            String keyHash = hashKey(rawKey);
+        seedKeyIfNotExists("dev_key_12345", "dev_key_", "Default Development Key");
+        seedKeyIfNotExists("rpa_7acfbf88940a446998da22ce005ab4ff", "rpa_7acfbf88", "Production Worker Bot Key");
+    }
 
-            ApiKey defaultKey = new ApiKey();
-            defaultKey.setKeyHash(keyHash);
-            defaultKey.setKeyPrefix("dev_key_");
-            defaultKey.setName("Default Development Key");
-            defaultKey.setDescription("Auto-generated default API key for development and testing");
-            defaultKey.setIsActive(true);
-            defaultKey.setPermissions(List.of("report"));
-            defaultKey.setCreatedBy("SystemInitializer");
-
-            apiKeyRepository.save(defaultKey);
+    private void seedKeyIfNotExists(String rawKey, String prefix, String name) {
+        String keyHash = hashKey(rawKey);
+        if (apiKeyRepository.findByKeyHashAndIsActiveTrue(keyHash).isEmpty()) {
+            ApiKey apiKey = new ApiKey();
+            apiKey.setKeyHash(keyHash);
+            apiKey.setKeyPrefix(prefix);
+            apiKey.setName(name);
+            apiKey.setDescription("Auto-seeded active API key for ingestion");
+            apiKey.setIsActive(true);
+            apiKey.setPermissions(List.of("report"));
+            apiKey.setCreatedBy("SystemInitializer");
+            apiKeyRepository.save(apiKey);
 
             log.info("==================================================================");
-            log.info("[REPORTER-API] Initialized default API Key for development: {}", rawKey);
+            log.info("[REPORTER-API] Initialized API Key: {} ({})", rawKey, name);
             log.info("==================================================================");
         }
     }

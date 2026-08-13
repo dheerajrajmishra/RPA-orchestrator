@@ -1,10 +1,25 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Box, Clock, Server, Bell, ShieldAlert, CheckCircle2, ChevronDown } from "lucide-react"
 import { useProcessStore } from "@/store/useProcessStore"
+import { API_BASE_URL } from "@/lib/config"
+
+type VmHost = {
+  id: string
+  name?: string
+  hostname?: string
+  status?: string
+}
+
+type Category = {
+  id: string
+  name: string
+  description?: string
+  color?: string
+}
 
 export default function RegisterProcessPage() {
   const router = useRouter()
@@ -15,7 +30,38 @@ export default function RegisterProcessPage() {
   const [name, setName] = useState("")
   const [slug, setSlug] = useState("")
   const [category, setCategory] = useState("Finance")
-  const [host, setHost] = useState("VM-FIN-01 (Online)")
+  const [host, setHost] = useState("VM-FIN-01")
+
+  const [vmHosts, setVmHosts] = useState<VmHost[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+
+  useEffect(() => {
+    // Fetch VM Hosts from database
+    fetch(`${API_BASE_URL}/api/hosts`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setVmHosts(data)
+          if (data.length > 0) {
+            setHost(data[0].hostname || data[0].name || "VM-FIN-01")
+          }
+        }
+      })
+      .catch(err => console.error("Error loading hosts:", err))
+
+    // Fetch Categories from database
+    fetch(`${API_BASE_URL}/api/categories`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setCategories(data)
+          if (data.length > 0) {
+            setCategory(data[0].name)
+          }
+        }
+      })
+      .catch(err => console.error("Error loading categories:", err))
+  }, [])
 
   const handleSave = () => {
     setIsSubmitting(true)
@@ -91,10 +137,16 @@ export default function RegisterProcessPage() {
                 <div className="space-y-2">
                   <Label>Category</Label>
                   <Select value={category} onChange={e => setCategory(e.target.value)}>
-                    <option>Finance</option>
-                    <option>HR</option>
-                    <option>Procurement</option>
-                    <option>IT</option>
+                    {categories.length === 0 ? (
+                      <>
+                        <option>Finance</option>
+                        <option>HR</option>
+                        <option>Procurement</option>
+                        <option>IT</option>
+                      </>
+                    ) : (
+                      categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)
+                    )}
                   </Select>
                 </div>
                 <div className="space-y-2">
@@ -126,14 +178,27 @@ export default function RegisterProcessPage() {
             <SectionHeader title="Execution Target" desc="Where will this process run?" />
             <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 space-y-5 shadow-sm">
               <div className="space-y-2">
-                <Label>Target Host VM</Label>
+                <Label>Target Host VM (Loaded from Database)</Label>
                 <Select value={host} onChange={e => setHost(e.target.value)}>
-                  <option>VM-FIN-01 (Online)</option>
-                  <option>VM-HR-01 (Online)</option>
-                  <option>VM-PROC-01 (Online)</option>
-                  <option>VM-IT-01 (Online)</option>
+                  {vmHosts.length === 0 ? (
+                    <>
+                      <option value="VM-FIN-01">VM-FIN-01 (Online)</option>
+                      <option value="VM-HR-01">VM-HR-01 (Online)</option>
+                      <option value="VM-PROC-01">VM-PROC-01 (Online)</option>
+                      <option value="VM-IT-01">VM-IT-01 (Online)</option>
+                    </>
+                  ) : (
+                    vmHosts.map(h => {
+                      const hName = h.hostname || h.name || "VM-Host"
+                      return (
+                        <option key={h.id} value={hName}>
+                          {hName} ({h.status || "online"})
+                        </option>
+                      )
+                    })
+                  )}
                 </Select>
-                <p className="text-xs text-[var(--muted-foreground)]">The specific virtual machine where this RPA bot is deployed.</p>
+                <p className="text-xs text-[var(--muted-foreground)]">The specific virtual machine host fetched from your registered database hosts.</p>
               </div>
               <div className="space-y-2 pt-4 border-t border-[var(--border)]">
                 <Label>API Key Binding</Label>

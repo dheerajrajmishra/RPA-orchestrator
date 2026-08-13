@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from "react"
 import { Plus, Copy, Trash2, CheckCircle2, AlertTriangle } from "lucide-react"
+import { PageLoader } from "@/components/ui/page-loader"
+import { Pagination } from "@/components/ui/pagination"
+import { API_BASE_URL } from "@/lib/config"
 
 type ApiKey = {
   id: string
@@ -21,16 +24,28 @@ export default function ApiKeysPage() {
   const [deletingKey, setDeletingKey] = useState<ApiKey | null>(null)
   const [selectedVm, setSelectedVm] = useState("VM-FIN-01")
   const [generatedKey, setGeneratedKey] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [totalElements, setTotalElements] = useState(0)
 
   useEffect(() => {
-    fetchKeys()
-  }, [])
+    fetchKeys(currentPage, itemsPerPage)
+  }, [currentPage, itemsPerPage])
 
-  const fetchKeys = () => {
-    fetch("http://localhost:8080/api/keys")
+  const fetchKeys = (page: number = 1, size: number = 10) => {
+    fetch(`${API_BASE_URL}/api/keys?page=${page - 1}&size=${size}`)
       .then(res => res.json())
       .then(data => {
-        setKeys(Array.isArray(data) ? data : [])
+        if (data && Array.isArray(data.content)) {
+          setKeys(data.content)
+          setTotalElements(data.totalElements ?? data.content.length)
+        } else if (Array.isArray(data)) {
+          setKeys(data)
+          setTotalElements(data.length)
+        } else {
+          setKeys([data])
+          setTotalElements(1)
+        }
         setIsLoading(false)
       })
       .catch(err => {
@@ -49,7 +64,7 @@ export default function ApiKeysPage() {
   const handleGenerate = async () => {
     try {
       const payload = { targetVm: selectedVm, name: `API Key (${selectedVm})` }
-      const res = await fetch("http://localhost:8080/api/keys", {
+      const res = await fetch(`${API_BASE_URL}/api/keys`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -78,7 +93,7 @@ export default function ApiKeysPage() {
   const confirmDelete = async () => {
     if (!deletingKey) return
     try {
-      const res = await fetch(`http://localhost:8080/api/keys/${deletingKey.id}`, { method: "DELETE" })
+      const res = await fetch(`${API_BASE_URL}/api/keys/${deletingKey.id}`, { method: "DELETE" })
       if (res.ok) {
         setKeys(prev => Array.isArray(prev) ? prev.filter(k => k.id !== deletingKey.id) : [])
         setDeletingKey(null)
@@ -93,6 +108,8 @@ export default function ApiKeysPage() {
     setCopiedId(id)
     setTimeout(() => setCopiedId(null), 2000)
   }
+
+  const totalPages = Math.ceil((totalElements || keys.length) / itemsPerPage) || 1
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12">
@@ -214,53 +231,62 @@ export default function ApiKeysPage() {
 
       <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm overflow-hidden">
         {isLoading ? (
-          <div className="p-12 text-center text-[var(--muted-foreground)] text-sm">
-            Loading...
-          </div>
+          <PageLoader message="Loading API keys..." />
         ) : !Array.isArray(keys) || keys.length === 0 ? (
           <div className="p-12 text-center text-[var(--muted-foreground)] text-sm">
             No API keys found. Generate one to get started.
           </div>
         ) : (
-          <table className="w-full text-sm text-left">
-            <thead className="text-xs text-[var(--muted-foreground)] uppercase bg-[var(--muted)]/50 border-b border-[var(--border)]">
-              <tr>
-                <th className="px-6 py-3 font-semibold tracking-wider">Key Name</th>
-                <th className="px-6 py-3 font-semibold tracking-wider">Prefix</th>
-                <th className="px-6 py-3 font-semibold tracking-wider">Created</th>
-                <th className="px-6 py-3 font-semibold tracking-wider text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border)]">
-              {keys.map((key) => {
-                const prefixVal = key.keyPrefix || key.prefix || "rpa_key_..."
-                const createdVal = key.createdAt ? new Date(key.createdAt).toLocaleDateString() : key.created || "Just now"
-                return (
-                  <tr key={key.id} className="hover:bg-[var(--muted)]/30 transition-colors">
-                    <td className="px-6 py-4 font-medium">{key.name}</td>
-                    <td className="px-6 py-4 font-mono text-xs text-[var(--primary)]">{prefixVal}***</td>
-                    <td className="px-6 py-4 text-[var(--muted-foreground)]">{createdVal}</td>
-                    <td className="px-6 py-4 text-right space-x-2">
-                      <button 
-                        onClick={() => handleCopy(key.id, prefixVal)}
-                        className={`p-1.5 transition-colors rounded cursor-pointer ${copiedId === key.id ? "text-emerald-400" : "text-[var(--muted-foreground)] hover:text-[var(--primary)]"}`}
-                        title="Copy Key Prefix"
-                      >
-                        {copiedId === key.id ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                      </button>
-                      <button 
-                        onClick={() => setDeletingKey(key)}
-                        className="p-1.5 text-[var(--muted-foreground)] hover:text-red-400 transition-colors rounded cursor-pointer"
-                        title="Delete Key"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          <>
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs text-[var(--muted-foreground)] uppercase bg-[var(--muted)]/50 border-b border-[var(--border)]">
+                <tr>
+                  <th className="px-6 py-3 font-semibold tracking-wider">Key Name</th>
+                  <th className="px-6 py-3 font-semibold tracking-wider">Prefix</th>
+                  <th className="px-6 py-3 font-semibold tracking-wider">Created</th>
+                  <th className="px-6 py-3 font-semibold tracking-wider text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {keys.map((key) => {
+                  const prefixVal = key.keyPrefix || key.prefix || "rpa_key_..."
+                  const createdVal = key.createdAt ? new Date(key.createdAt).toLocaleDateString() : key.created || "Just now"
+                  return (
+                    <tr key={key.id} className="hover:bg-[var(--muted)]/30 transition-colors">
+                      <td className="px-6 py-4 font-medium">{key.name}</td>
+                      <td className="px-6 py-4 font-mono text-xs text-[var(--primary)]">{prefixVal}***</td>
+                      <td className="px-6 py-4 text-[var(--muted-foreground)]">{createdVal}</td>
+                      <td className="px-6 py-4 text-right space-x-2">
+                        <button 
+                          onClick={() => handleCopy(key.id, prefixVal)}
+                          className={`p-1.5 transition-colors rounded cursor-pointer ${copiedId === key.id ? "text-emerald-400" : "text-[var(--muted-foreground)] hover:text-[var(--primary)]"}`}
+                          title="Copy Key Prefix"
+                        >
+                          {copiedId === key.id ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        </button>
+                        <button 
+                          onClick={() => setDeletingKey(key)}
+                          className="p-1.5 text-[var(--muted-foreground)] hover:text-red-400 transition-colors rounded cursor-pointer"
+                          title="Delete Key"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalElements || keys.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+              onItemsPerPageChange={setItemsPerPage}
+            />
+          </>
         )}
       </div>
     </div>

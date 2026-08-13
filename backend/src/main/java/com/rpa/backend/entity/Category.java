@@ -3,12 +3,11 @@ package com.rpa.backend.entity;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.util.UUID;
-import java.util.Set;
 
 @Entity
-@Table(name = "roles")
+@Table(name = "categories")
 @Data
-public class Role {
+public class Category {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -17,11 +16,6 @@ public class Role {
     private String name;
     
     private String description;
-
-    private Boolean isSystem = false;
-
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "role_permissions", joinColumns = @JoinColumn(name = "role_id"))
-    @Column(name = "permission")
-    private Set<String> permissions;
+    
+    private String color; // e.g. #3b82f6 or blue
 }

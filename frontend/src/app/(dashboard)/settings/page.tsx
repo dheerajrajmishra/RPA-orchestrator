@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Save, Bell, Shield, Database, LayoutDashboard, Globe, Mail } from "lucide-react"
+import { API_BASE_URL } from "@/lib/config"
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<"general" | "security" | "retention" | "notifications">("general")
@@ -10,7 +11,7 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    fetch("http://localhost:8080/api/settings")
+    fetch(`${API_BASE_URL}/api/settings`)
       .then(res => res.json())
       .then(data => { setSettings(data); setIsLoading(false); })
       .catch(err => { console.error(err); setIsLoading(false); })
@@ -19,7 +20,7 @@ export default function SettingsPage() {
   const handleSave = async () => {
     setIsSaving(true)
     try {
-      await fetch("http://localhost:8080/api/settings", {
+      await fetch(`${API_BASE_URL}/api/settings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settings || {})

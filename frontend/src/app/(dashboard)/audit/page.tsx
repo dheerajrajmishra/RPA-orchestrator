@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { Search, Filter, Download, User, Settings, PlayCircle, Key, Server, Shield } from "lucide-react"
+import { Pagination } from "@/components/ui/pagination"
+import { API_BASE_URL } from "@/lib/config"
 
 type AuditEvent = {
   id: string
@@ -18,13 +20,37 @@ export default function AuditLogsPage() {
   const [logs, setLogs] = useState<AuditEvent[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
+
+  const [totalElements, setTotalElements] = useState(0)
 
   useEffect(() => {
-    fetch("http://localhost:8080/api/audit")
+    fetchLogs(currentPage, itemsPerPage)
+  }, [currentPage, itemsPerPage])
+
+  const fetchLogs = (page: number = 1, size: number = 10) => {
+    fetch(`${API_BASE_URL}/api/audit?page=${page - 1}&size=${size}`)
       .then(res => res.json())
-      .then(data => { setLogs(data); setIsLoading(false); })
-      .catch(err => { console.error(err); setIsLoading(false); })
-  }, [])
+      .then(data => {
+        if (data && Array.isArray(data.content)) {
+          setLogs(data.content)
+          setTotalElements(data.totalElements ?? data.content.length)
+        } else if (Array.isArray(data)) {
+          setLogs(data)
+          setTotalElements(data.length)
+        } else {
+          setLogs([data])
+          setTotalElements(1)
+        }
+        setIsLoading(false)
+      })
+      .catch(err => {
+        console.error(err)
+        setIsLoading(false)
+      })
+  }
+
   const [showFilters, setShowFilters] = useState(false)
   const [typeFilter, setTypeFilter] = useState("all")
 
@@ -36,6 +62,8 @@ export default function AuditLogsPage() {
     
     return matchesSearch && matchesType
   })
+
+  const totalPages = Math.ceil((totalElements || filteredLogs.length) / itemsPerPage) || 1
 
   const handleExport = () => {
     const headers = ["Timestamp", "Actor", "Event", "Target Resource", "IP Address"]
@@ -87,7 +115,7 @@ export default function AuditLogsPage() {
               type="text" 
               placeholder="Search events, users, or resources..." 
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
               className="w-full pl-9 pr-4 py-2 bg-[var(--card)] border border-[var(--border)] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
             />
           </div>
@@ -105,7 +133,7 @@ export default function AuditLogsPage() {
               <label className="text-xs font-bold uppercase tracking-widest text-[var(--muted-foreground)]">Event Type</label>
               <select 
                 value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
+                onChange={(e) => { setTypeFilter(e.target.value); setCurrentPage(1); }}
                 className="w-full px-3 py-2 bg-[var(--muted)]/50 border border-[var(--border)] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] cursor-pointer"
               >
                 <option value="all">All Events</option>
@@ -116,7 +144,7 @@ export default function AuditLogsPage() {
             </div>
             <div className="pt-5">
               <button 
-                onClick={() => { setSearchTerm(""); setTypeFilter("all"); }}
+                onClick={() => { setSearchTerm(""); setTypeFilter("all"); setCurrentPage(1); }}
                 className="text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] underline underline-offset-2"
               >
                 Clear all filters
@@ -175,10 +203,19 @@ export default function AuditLogsPage() {
           </tbody>
         </table>
         
-        {filteredLogs.length === 0 && (
+        {filteredLogs.length === 0 ? (
           <div className="p-12 text-center text-[var(--muted-foreground)] text-sm">
             No audit logs found matching your search.
           </div>
+        ) : (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalElements || filteredLogs.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setItemsPerPage}
+          />
         )}
         </>
         )}

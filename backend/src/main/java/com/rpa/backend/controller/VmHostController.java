@@ -3,6 +3,9 @@ package com.rpa.backend.controller;
 import com.rpa.backend.entity.VmHost;
 import com.rpa.backend.repository.VmHostRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
@@ -13,7 +16,12 @@ public class VmHostController {
     @Autowired private VmHostRepository repo;
     
     @GetMapping
-    public List<VmHost> getAll() {
+    public Object getAll(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        if (page != null && size != null) {
+            return repo.findAll(PageRequest.of(page, size, Sort.by("hostname").ascending()));
+        }
         return repo.findAll();
     }
     

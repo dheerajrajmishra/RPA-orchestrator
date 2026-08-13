@@ -17,7 +17,12 @@ public class ApiKeyController {
     @Autowired private ApiKeyRepository repo;
     
     @GetMapping
-    public List<ApiKey> getAll() {
+    public Object getAll(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        if (page != null && size != null) {
+            return repo.findAll(org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by("name").ascending()));
+        }
         return repo.findAll();
     }
     

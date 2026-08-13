@@ -1,12 +1,14 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import {
   Activity, CheckCircle2, XCircle, TrendingUp, Monitor, Layers,
-  ChevronDown, ChevronRight, Search, FileText, ChevronUp
+  ChevronDown, ChevronRight, Search, FileText, ChevronUp, Plus
 } from "lucide-react"
 
 import { useProcessStore, type Process } from "@/store/useProcessStore"
+import { Pagination } from "@/components/ui/pagination"
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string; bg: string }> = {
   success:   { label: "SUCCESS",  color: "text-emerald-400", dot: "bg-emerald-400", bg: "bg-emerald-400/10" },
@@ -157,6 +159,9 @@ export default function ProcessOverviewPage() {
   const [statusFilter, setStatusFilter] = useState("All Statuses")
   const [hostFilter, setHostFilter] = useState("All VMs")
 
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
+
   const filtered = processes.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchCat = categoryFilter === "All Categories" || p.category === categoryFilter
@@ -165,6 +170,9 @@ export default function ProcessOverviewPage() {
     return matchSearch && matchCat && matchStatus && matchHost
   })
 
+  const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1
+  const paginatedProcesses = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -172,9 +180,17 @@ export default function ProcessOverviewPage() {
           <h1 className="text-xl font-bold tracking-tight">Process Overview</h1>
           <p className="text-xs text-[var(--muted-foreground)] mt-0.5">All registered processes with latest run details — click any row to expand</p>
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-400/10 px-3 py-1.5 rounded-full ring-1 ring-emerald-400/30">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          All VMs reporting
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-400/10 px-3 py-1.5 rounded-full ring-1 ring-emerald-400/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            All VMs reporting
+          </div>
+          <Link
+            href="/processes/new"
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-md text-sm font-medium hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
+          >
+            <Plus className="h-4 w-4" /> Add Process
+          </Link>
         </div>
       </div>
 
@@ -182,16 +198,16 @@ export default function ProcessOverviewPage() {
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-          <input type="text" placeholder="Search processes..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+          <input type="text" placeholder="Search processes..." value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
             className="w-full pl-8 pr-3 py-1.5 text-sm bg-[var(--card)] border border-[var(--border)] rounded-md focus:outline-none focus:ring-1 focus:ring-[var(--ring)] placeholder:text-[var(--muted-foreground)]" />
         </div>
-        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="text-sm bg-[var(--card)] border border-[var(--border)] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--ring)] text-[var(--foreground)]">
+        <select value={categoryFilter} onChange={e => { setCategoryFilter(e.target.value); setCurrentPage(1); }} className="text-sm bg-[var(--card)] border border-[var(--border)] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--ring)] text-[var(--foreground)] cursor-pointer">
           <option>All Categories</option><option>Finance</option><option>HR</option><option>Procurement</option><option>IT</option>
         </select>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="text-sm bg-[var(--card)] border border-[var(--border)] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--ring)] text-[var(--foreground)]">
+        <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }} className="text-sm bg-[var(--card)] border border-[var(--border)] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--ring)] text-[var(--foreground)] cursor-pointer">
           <option>All Statuses</option><option>success</option><option>failed</option><option>running</option>
         </select>
-        <select value={hostFilter} onChange={e => setHostFilter(e.target.value)} className="text-sm bg-[var(--card)] border border-[var(--border)] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--ring)] text-[var(--foreground)]">
+        <select value={hostFilter} onChange={e => { setHostFilter(e.target.value); setCurrentPage(1); }} className="text-sm bg-[var(--card)] border border-[var(--border)] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--ring)] text-[var(--foreground)] cursor-pointer">
           <option>All VMs</option><option>VM-FIN-01</option><option>VM-HR-01</option><option>VM-PROC-01</option>
         </select>
         <div className="ml-auto text-xs text-[var(--muted-foreground)]">{filtered.length} process{filtered.length !== 1 ? "es" : ""}</div>
@@ -207,10 +223,21 @@ export default function ProcessOverviewPage() {
           <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)] hidden lg:block">Last Run</span>
           <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted-foreground)]">Last 3</span>
         </div>
-        {filtered.length === 0
-          ? <div className="py-12 text-center text-[var(--muted-foreground)] text-sm">No processes match your filters.</div>
-          : filtered.map(p => <ProcessRow key={p.id} process={p} />)
-        }
+        {filtered.length === 0 ? (
+          <div className="py-12 text-center text-[var(--muted-foreground)] text-sm">No processes match your filters.</div>
+        ) : (
+          <>
+            {paginatedProcesses.map(p => <ProcessRow key={p.id} process={p} />)}
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filtered.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+              onItemsPerPageChange={setItemsPerPage}
+            />
+          </>
+        )}
       </div>
     </div>
   )
